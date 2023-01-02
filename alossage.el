@@ -57,25 +57,9 @@
 
 ;;; Code:
 
-(defun alossage-string-pad (string length &optional padding start)
-  "Pad STRING to LENGTH using PADDING.
-If PADDING is nil, the space character is used.  If not nil, it
-should be a character.
-
-If STRING is longer than the absolute value of LENGTH, no padding
-is done.
-
-If START is nil (or not present), the padding is done to the end
-of the string, and if non-nil, padding is done to the start of
-the string."
-  (unless (natnump length)
-    (signal 'wrong-type-argument (list 'natnump length)))
-  (let ((pad-length (- length (length string))))
-    (cond ((<= pad-length 0) string)
-          (start (concat (make-string pad-length (or padding ?\s)) string))
-          (t (concat string (make-string pad-length (or padding ?\s)))))))
 
 (defvar alossage-buffer-name "*Auto-Lossage*")
+
 (defun alossage-update ()
   "Update *Auto-Lossage* buffer with current lossage.
 Also scrolls a window displaying the buffer so that the most
@@ -83,25 +67,37 @@ recent keys are visible.
 
 Normally called from `post-command-hook' when
 `alossage-mode' is active."
-  (save-excursion
-    (let ((buf (get-buffer-create alossage-buffer-name))
-          (keys-alist (append (recent-keys t) nil)))
-      (set-buffer buf)
-      (delete-region (point-min)
-                     (point-max))
+  (with-current-buffer (get-buffer-create alossage-buffer-name)
+    (delete-region (point-min)
+                   (point-max))
+    (goto-char (point-min))
+    (let ((comment-start ";; ")
+          (comment-column 24))
+      (insert (concat " "
+                      (mapconcat (lambda (key)
+                                   (cond ((and (consp key)
+                                               (null (car key)))
+                                          (format ";; %s\n"
+                                                  (if
+                                                      (symbolp (cdr
+                                                                key))
+                                                      (cdr key)
+                                                    "anonymous-command")))
+                                         ((or (integerp key)
+                                              (symbolp key)
+                                              (listp key))
+                                          (single-key-description key))
+                                         (t
+                                          (prin1-to-string key nil))))
+                                 (recent-keys 'include-cmds)
+                                 " ")))
       (goto-char (point-min))
-      (dotimes (i (length keys-alist))
-        (if (numberp (nth i keys-alist))
-            (insert "\n"
-                    (alossage-string-pad (key-description
-                                          (vector
-                                           (nth i
-                                                keys-alist)))
-                                         10))
-          (insert " ;; " (symbol-name (cdr-safe (nth i keys-alist))))))
+      (while (not (eobp))
+        (comment-indent)
+        (forward-line 1))
       (buffer-disable-undo)
       (set-buffer-modified-p nil)
-      (let ((win (get-buffer-window buf 'visible)))
+      (let ((win (get-buffer-window (current-buffer) 'visible)))
         (if win
             (save-selected-window
               (select-window win)
@@ -120,10 +116,10 @@ the buffer *Auto-Lossage* after every command.
 With negative ARG, turn off the updating.
 With positive ARG, turn it on."
   (interactive "P")
-  (let ((newval (if (null arg) (not alossage-mode)
+  (let ((newval (if (null arg)
+                    (not alossage-mode)
                   (> (prefix-numeric-value arg) 0))))
-    (cond ((eq newval alossage-mode) t) ; no change
-          (newval                       ; turn on the mode
+    (cond (newval                       ; turn on the mode
            (add-hook 'post-command-hook #'alossage-update))
           (t                            ; turn off the mode
            (remove-hook 'post-command-hook #'alossage-update)))
