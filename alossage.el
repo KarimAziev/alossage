@@ -1,10 +1,13 @@
-;;; alossage.el --- view-lossage with automatic refresh
+;;; alossage.el --- View lossage with automatic refresh -*- lexical-binding: t -*-
 
 ;; Copyright (C) 2001 Riku Saikkonen
 
 ;; Author: Riku Saikkonen <Riku.Saikkonen@hut.fi>
-;; Version: 0.9
+;;         Karim Aziiev <karim.aziiev@gmail.com>
+;; Version: 1.0
 ;; Keywords: help
+;; URL: https://github.com/KarimAziev/alossage
+;; Package-Requires: ((emacs "24.3"))
 
 ;; This file is *NOT* part of GNU Emacs.
 ;;
@@ -48,9 +51,31 @@
 ;;;
 ;;; Version 0.9 (January 20th, 2001)
 ;;;  * Initial release.
+;;; Version 1.0 (2022)
+;;;  * Replace auto-lossage prefix with alossage
+;;;  * Change rendering
 
 ;;; Code:
 
+(defun alossage-string-pad (string length &optional padding start)
+  "Pad STRING to LENGTH using PADDING.
+If PADDING is nil, the space character is used.  If not nil, it
+should be a character.
+
+If STRING is longer than the absolute value of LENGTH, no padding
+is done.
+
+If START is nil (or not present), the padding is done to the end
+of the string, and if non-nil, padding is done to the start of
+the string."
+  (unless (natnump length)
+    (signal 'wrong-type-argument (list 'natnump length)))
+  (let ((pad-length (- length (length string))))
+    (cond ((<= pad-length 0) string)
+          (start (concat (make-string pad-length (or padding ?\s)) string))
+          (t (concat string (make-string pad-length (or padding ?\s)))))))
+
+(defvar alossage-buffer-name "*Auto-Lossage*")
 (defun alossage-update ()
   "Update *Auto-Lossage* buffer with current lossage.
 Also scrolls a window displaying the buffer so that the most
@@ -59,7 +84,7 @@ recent keys are visible.
 Normally called from `post-command-hook' when
 `alossage-mode' is active."
   (save-excursion
-    (let ((buf (get-buffer-create "*Auto-Lossage*"))
+    (let ((buf (get-buffer-create alossage-buffer-name))
           (keys-alist (append (recent-keys t) nil)))
       (set-buffer buf)
       (delete-region (point-min)
@@ -67,8 +92,13 @@ Normally called from `post-command-hook' when
       (goto-char (point-min))
       (dotimes (i (length keys-alist))
         (if (numberp (nth i keys-alist))
-            (insert "\n" (key-description (vector (nth i keys-alist))))
-          (insert " " (symbol-name (cdr-safe (nth i keys-alist))))))
+            (insert "\n"
+                    (alossage-string-pad (key-description
+                                          (vector
+                                           (nth i
+                                                keys-alist)))
+                                         10))
+          (insert " ;; " (symbol-name (cdr-safe (nth i keys-alist))))))
       (buffer-disable-undo)
       (set-buffer-modified-p nil)
       (let ((win (get-buffer-window buf 'visible)))
@@ -82,6 +112,7 @@ Normally called from `post-command-hook' when
   "Non-nil means that automatic updating of lossage is enabled.
 Should be changed only by the function `alossage-mode'.")
 
+;;;###autoload
 (defun alossage-mode (arg)
   "Toggle automatic updating of lossage.
 When automatic updating is enabled, lossage is updated into
@@ -93,11 +124,25 @@ With positive ARG, turn it on."
                   (> (prefix-numeric-value arg) 0))))
     (cond ((eq newval alossage-mode) t) ; no change
           (newval                       ; turn on the mode
-           (add-hook 'post-command-hook 'alossage-update))
+           (add-hook 'post-command-hook #'alossage-update))
           (t                            ; turn off the mode
-           (remove-hook 'post-command-hook 'alossage-update)))
+           (remove-hook 'post-command-hook #'alossage-update)))
     (setq alossage-mode newval)))
 
+;;;###autoload
+(defun alossage-buffer ()
+  "Make a new buffer displaying automatically updated lossage.
+Turns on `alossage-mode' and displays the generated
+*Auto-Lossage* buffer in a newly created frame.
+The new frame will be 10 characters wide and as high as the
+current frame."
+  (interactive)
+  (alossage-mode 1)
+  (with-current-buffer (get-buffer-create alossage-buffer-name)
+    (unless (get-buffer-window (current-buffer))
+      (pop-to-buffer (current-buffer)))))
+
+;;;###autoload
 (defun alossage-make-frame ()
   "Make a new frame displaying automatically updated lossage.
 Turns on `alossage-mode' and displays the generated
@@ -106,10 +151,10 @@ The new frame will be 10 characters wide and as high as the
 current frame."
   (interactive)
   (alossage-mode 1)
-  (with-current-buffer (get-buffer-create "*Auto-Lossage*")
+  (with-current-buffer (get-buffer-create alossage-buffer-name)
     (make-frame `((width . 10)
                   (height . ,(frame-height))))))
 
+;;; alossage.el ends here
 (provide 'alossage)
-
 ;;; alossage.el ends here
