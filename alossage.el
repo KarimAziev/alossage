@@ -60,6 +60,11 @@
 
 (defvar alossage-buffer-name "*Auto-Lossage*")
 
+(defcustom alossage-stop-in-own-buffer t
+  "Whether to not updating in buffer `alossage-buffer-name'."
+  :group 'alossage
+  :type 'boolean)
+
 (defun alossage-update ()
   "Update *Auto-Lossage* buffer with current lossage.
 Also scrolls a window displaying the buffer so that the most
@@ -67,42 +72,45 @@ recent keys are visible.
 
 Normally called from `post-command-hook' when
 `alossage-mode' is active."
-  (with-current-buffer (get-buffer-create alossage-buffer-name)
-    (delete-region (point-min)
-                   (point-max))
-    (goto-char (point-min))
-    (let ((comment-start ";; ")
-          (comment-column 24))
-      (insert (concat " "
-                      (mapconcat (lambda (key)
-                                   (cond ((and (consp key)
-                                               (null (car key)))
-                                          (format ";; %s\n"
-                                                  (if
-                                                      (symbolp (cdr
-                                                                key))
-                                                      (cdr key)
-                                                    "anonymous-command")))
-                                         ((or (integerp key)
-                                              (symbolp key)
-                                              (listp key))
-                                          (single-key-description key))
-                                         (t
-                                          (prin1-to-string key nil))))
-                                 (recent-keys 'include-cmds)
-                                 " ")))
+  (when (not (and alossage-stop-in-own-buffer
+                  (eq (current-buffer)
+                      (get-buffer alossage-buffer-name))))
+    (with-current-buffer (get-buffer-create alossage-buffer-name)
+      (delete-region (point-min)
+                     (point-max))
       (goto-char (point-min))
-      (while (not (eobp))
-        (comment-indent)
-        (forward-line 1))
-      (buffer-disable-undo)
-      (set-buffer-modified-p nil)
-      (let ((win (get-buffer-window (current-buffer) 'visible)))
-        (if win
-            (save-selected-window
-              (select-window win)
-              (goto-char (point-max))
-              (recenter -1)))))))
+      (let ((comment-start ";; ")
+            (comment-column 24))
+        (insert (concat " "
+                        (mapconcat (lambda (key)
+                                     (cond ((and (consp key)
+                                                 (null (car key)))
+                                            (format ";; %s\n"
+                                                    (if
+                                                        (symbolp (cdr
+                                                                  key))
+                                                        (cdr key)
+                                                      "anonymous-command")))
+                                           ((or (integerp key)
+                                                (symbolp key)
+                                                (listp key))
+                                            (single-key-description key))
+                                           (t
+                                            (prin1-to-string key nil))))
+                                   (recent-keys 'include-cmds)
+                                   " ")))
+        (goto-char (point-min))
+        (while (not (eobp))
+          (comment-indent)
+          (forward-line 1))
+        (buffer-disable-undo)
+        (set-buffer-modified-p nil)
+        (let ((win (get-buffer-window (current-buffer) 'visible)))
+          (if win
+              (save-selected-window
+                (select-window win)
+                (goto-char (point-max))
+                (recenter -1))))))))
 
 (defvar alossage-mode nil
   "Non-nil means that automatic updating of lossage is enabled.
