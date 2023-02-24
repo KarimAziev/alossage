@@ -112,26 +112,24 @@ Normally called from `post-command-hook' when
                 (goto-char (point-max))
                 (recenter -1))))))))
 
-(defvar alossage-mode nil
-  "Non-nil means that automatic updating of lossage is enabled.
-Should be changed only by the function `alossage-mode'.")
+
+(defvar alossage-buffer-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "t") #'alossage-mode)
+    (define-key map (kbd "K") #'alossage-mode)
+    (define-key map (kbd "q") #'bury-buffer)
+    map))
 
 ;;;###autoload
-(defun alossage-mode (arg)
-  "Toggle automatic updating of lossage.
+(define-minor-mode alossage-mode
+  "Toggle `alossage-mode' globally.
 When automatic updating is enabled, lossage is updated into
-the buffer *Auto-Lossage* after every command.
-With negative ARG, turn off the updating.
-With positive ARG, turn it on."
-  (interactive "P")
-  (let ((newval (if (null arg)
-                    (not alossage-mode)
-                  (> (prefix-numeric-value arg) 0))))
-    (cond (newval                       ; turn on the mode
-           (add-hook 'post-command-hook #'alossage-update))
-          (t                            ; turn off the mode
-           (remove-hook 'post-command-hook #'alossage-update)))
-    (setq alossage-mode newval)))
+the buffer *Auto-Lossage* after every command."
+  :group 'alossage
+  :global t
+  (remove-hook 'post-command-hook #'alossage-update)
+  (when alossage-mode
+    (add-hook 'post-command-hook #'alossage-update)))
 
 ;;;###autoload
 (defun alossage-buffer ()
@@ -141,10 +139,15 @@ Turns on `alossage-mode' and displays the generated
 The new frame will be 10 characters wide and as high as the
 current frame."
   (interactive)
-  (alossage-mode 1)
-  (with-current-buffer (get-buffer-create alossage-buffer-name)
-    (unless (get-buffer-window (current-buffer))
-      (pop-to-buffer (current-buffer)))))
+  (if (and (symbol-value 'alossage-mode)
+           (get-buffer alossage-buffer-name)
+           (get-buffer-window alossage-buffer-name))
+      (alossage-mode -1)
+    (progn (alossage-mode 1)
+           (with-current-buffer (get-buffer-create alossage-buffer-name)
+             (use-local-map alossage-buffer-map)
+             (unless (get-buffer-window (current-buffer))
+               (pop-to-buffer (current-buffer)))))))
 
 ;;;###autoload
 (defun alossage-make-frame ()
@@ -154,11 +157,13 @@ Turns on `alossage-mode' and displays the generated
 The new frame will be 10 characters wide and as high as the
 current frame."
   (interactive)
-  (alossage-mode 1)
-  (with-current-buffer (get-buffer-create alossage-buffer-name)
-    (make-frame `((width . 10)
-                  (height . ,(frame-height))))))
+  (if (and (symbol-value 'alossage-mode)
+           (get-buffer alossage-buffer-name))
+      (alossage-mode -1))
+  (progn (alossage-mode 1)
+         (with-current-buffer (get-buffer-create alossage-buffer-name)
+           (make-frame `((width . 10)
+                         (height . ,(frame-height)))))))
 
-;;; alossage.el ends here
 (provide 'alossage)
 ;;; alossage.el ends here
